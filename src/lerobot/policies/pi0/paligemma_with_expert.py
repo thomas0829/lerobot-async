@@ -222,7 +222,13 @@ class PaliGemmaWithExpertModel(PreTrainedModel):
             return self.paligemma.model.get_image_features(image)
 
     def embed_language_tokens(self, tokens: torch.Tensor):
-        return self.paligemma.language_model.embed_tokens(tokens)
+        # Handle different model structures
+        if hasattr(self.paligemma.language_model, "embed_tokens"):
+            return self.paligemma.language_model.embed_tokens(tokens)
+        elif hasattr(self.paligemma.language_model, "model") and hasattr(self.paligemma.language_model.model, "embed_tokens"):
+            return self.paligemma.language_model.model.embed_tokens(tokens)
+        else:
+            raise AttributeError("Could not find embed_tokens in language model")
 
     # TODO: break down this huge forward into modules or functions
     def forward(
@@ -234,7 +240,10 @@ class PaliGemmaWithExpertModel(PreTrainedModel):
         use_cache: bool | None = None,
         fill_kv_cache: bool | None = None,
     ):
-        models = [self.paligemma.language_model, self.gemma_expert.model]
+        # Get the actual model with layers
+        paligemma_model = self.paligemma.language_model.model if hasattr(self.paligemma.language_model, "model") else self.paligemma.language_model
+        expert_model = self.gemma_expert.model.model if hasattr(self.gemma_expert.model, "model") else self.gemma_expert.model
+        models = [paligemma_model, expert_model]
 
         for hidden_states in inputs_embeds:
             # TODO this is very inefficient

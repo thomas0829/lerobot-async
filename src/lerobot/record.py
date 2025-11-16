@@ -201,7 +201,7 @@ class DatasetRecordConfig:
     # Limit the frames per second.
     fps: int = 30
     # Number of seconds for data recording for each episode.
-    episode_time_s: int | float = 60
+    episode_time_s: int | float = 600
     # Number of seconds for resetting the environment after each episode.
     reset_time_s: int | float = 60
     # Number of episodes to record.
@@ -305,6 +305,11 @@ def record_loop(
 
     timestamp = 0
     start_episode_t = time.perf_counter()
+    loop_count = 0
+    loop_times = []
+    obs_times = []
+    rerun_times = []
+    
     while timestamp < control_time_s:
         start_loop_t = time.perf_counter()
 
@@ -312,7 +317,10 @@ def record_loop(
             events["exit_early"] = False
             break
 
+        obs_start = time.perf_counter()
         observation = robot.get_observation()
+        obs_time = time.perf_counter() - obs_start
+        obs_times.append(obs_time)
 
         if policy is not None or dataset is not None:
             observation_frame = build_dataset_frame(dataset.features, observation, prefix="observation")
@@ -366,10 +374,26 @@ def record_loop(
             remaining_time = control_time_s - timestamp
             status_display.update_reset(remaining_time)
 
+        rerun_time = 0
         if display_data:
-            log_rerun_data(observation, action)
+            rerun_start = time.perf_counter()
+            # Only send images every 10 frames to reduce overhead
+            skip_images = (loop_count % 10 != 0)
+            log_rerun_data(observation, action, skip_images=skip_images)
+            rerun_time = time.perf_counter() - rerun_start
+            rerun_times.append(rerun_time)
 
         dt_s = time.perf_counter() - start_loop_t
+        loop_times.append(dt_s)
+        loop_count += 1
+        
+        # Log performance every 30 frames (1 second)
+        if loop_count % 30 == 0:
+            avg_loop = sum(loop_times[-30:]) / 30 * 1000
+            avg_obs = sum(obs_times[-30:]) / 30 * 1000
+            avg_rerun = sum(rerun_times[-30:]) / 30 * 1000 if rerun_times else 0
+            logging.info(f"[{loop_count}] Loop: {avg_loop:.1f}ms | Obs: {avg_obs:.1f}ms | Rerun: {avg_rerun:.1f}ms")
+        
         busy_wait(1 / fps - dt_s)
 
         timestamp = time.perf_counter() - start_episode_t
@@ -441,6 +465,18 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
     robot.connect()
     if teleop is not None:
         teleop.connect()
+
+    # Warm-up cameras to stabilize frame capture
+    if len(robot.cameras) > 0:
+        logging.info(f"Warming up {len(robot.cameras)} camera(s) for 5 seconds...")
+        warmup_start = time.perf_counter()
+        warmup_frames = 0
+        while time.perf_counter() - warmup_start < 5.0:
+            for cam in robot.cameras.values():
+                _ = cam.async_read(timeout_ms=1000)
+            warmup_frames += 1
+            time.sleep(1.0 / cfg.dataset.fps)
+        logging.info(f"Camera warm-up complete! Read {warmup_frames} frames.")
 
     listener, events = init_keyboard_listener()
 

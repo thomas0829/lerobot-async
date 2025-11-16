@@ -142,6 +142,18 @@ def teleoperate(cfg: TeleoperateConfig):
     teleop.connect()
     robot.connect()
 
+    # Warm-up cameras to stabilize frame capture
+    if len(robot.cameras) > 0:
+        logging.info(f"Warming up {len(robot.cameras)} camera(s) for 5 seconds...")
+        warmup_start = time.perf_counter()
+        warmup_frames = 0
+        while time.perf_counter() - warmup_start < 5.0:
+            for cam in robot.cameras.values():
+                _ = cam.async_read(timeout_ms=1000)
+            warmup_frames += 1
+            time.sleep(1.0 / cfg.fps)
+        logging.info(f"Camera warm-up complete! Read {warmup_frames} frames.")
+
     try:
         teleop_loop(teleop, robot, cfg.fps, display_data=cfg.display_data, duration=cfg.teleop_time_s)
     except KeyboardInterrupt:

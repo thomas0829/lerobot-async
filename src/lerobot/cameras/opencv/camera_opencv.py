@@ -169,6 +169,10 @@ class OpenCVCamera(Camera):
                 f"Run `python -m lerobot.find_cameras opencv` to find available cameras."
             )
 
+        # Set buffer size to 1 to minimize latency
+        # This ensures we always get the latest frame instead of old buffered frames
+        self.videocapture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
         self._configure_capture_settings()
 
         if warmup:
@@ -383,9 +387,15 @@ class OpenCVCamera(Camera):
         3. Sets new_frame_event to notify listeners
 
         Stops on DeviceNotConnectedError, logs other errors and continues.
+        
+        Note: The loop runs as fast as possible to minimize latency. OpenCV's
+        VideoCapture.read() will naturally skip old frames in the buffer when
+        called frequently enough, effectively preventing buffer buildup.
         """
         while not self.stop_event.is_set():
             try:
+                # Just read the frame - OpenCV will handle buffer management
+                # when we read frequently enough
                 color_image = self.read()
 
                 with self.frame_lock:

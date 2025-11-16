@@ -44,6 +44,7 @@ class PI0Config(PreTrainedConfig):
 
     # Image preprocessing
     resize_imgs_with_padding: tuple[int, int] = (224, 224)
+    image_resolution: tuple[int, int] | None = None  # Alias for resize_imgs_with_padding (for pi0_base compatibility)
 
     # Add empty images. Used by pi0_aloha_sim which adds the empty
     # left and right wrist cameras in addition to the top camera.
@@ -57,6 +58,11 @@ class PI0Config(PreTrainedConfig):
     # Gripper dimensions will remain in absolute values.
     use_delta_joint_actions_aloha: bool = False
 
+    # Model architecture (for pi0_base compatibility)
+    paligemma_variant: str | None = None
+    action_expert_variant: str | None = None
+    dtype: str = "float32"
+
     # Tokenizer
     tokenizer_max_length: int = 48
 
@@ -65,6 +71,13 @@ class PI0Config(PreTrainedConfig):
 
     # Decoding
     num_steps: int = 10
+    num_inference_steps: int | None = None  # Alias for num_steps (for pi0_base compatibility)
+
+    # Time sampling (for pi0_base compatibility)
+    time_sampling_beta_alpha: float = 1.5
+    time_sampling_beta_beta: float = 1.0
+    min_period: float = 0.004
+    max_period: float = 4.0
 
     # Attention utils
     use_cache: bool = True
@@ -74,12 +87,16 @@ class PI0Config(PreTrainedConfig):
     freeze_vision_encoder: bool = True
     train_expert_only: bool = False
     train_state_proj: bool = True
+    gradient_checkpointing: bool = False
+    compile_model: bool = False
+    compile_mode: str = "max-autotune"
 
     # Training presets
     optimizer_lr: float = 2.5e-5
     optimizer_betas: tuple[float, float] = (0.9, 0.95)
     optimizer_eps: float = 1e-8
     optimizer_weight_decay: float = 1e-10
+    optimizer_grad_clip_norm: float | None = None  # For pi0_base compatibility
 
     scheduler_warmup_steps: int = 1_000
     scheduler_decay_steps: int = 30_000
@@ -89,6 +106,12 @@ class PI0Config(PreTrainedConfig):
 
     def __post_init__(self):
         super().__post_init__()
+
+        # Handle aliases for pi0_base compatibility
+        if self.image_resolution is not None:
+            self.resize_imgs_with_padding = tuple(self.image_resolution)
+        if self.num_inference_steps is not None:
+            self.num_steps = self.num_inference_steps
 
         # TODO(Steven): Validate device and amp? in all policy configs?
         """Input validation (not exhaustive)."""
