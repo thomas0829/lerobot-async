@@ -388,14 +388,11 @@ class OpenCVCamera(Camera):
 
         Stops on DeviceNotConnectedError, logs other errors and continues.
         
-        Note: The loop runs as fast as possible to minimize latency. OpenCV's
-        VideoCapture.read() will naturally skip old frames in the buffer when
-        called frequently enough, effectively preventing buffer buildup.
+        Note: Buffer size is already set to 1 in connect() via CAP_PROP_BUFFERSIZE,
+        which minimizes latency without needing explicit buffer flushing.
         """
         while not self.stop_event.is_set():
             try:
-                # Just read the frame - OpenCV will handle buffer management
-                # when we read frequently enough
                 color_image = self.read()
 
                 with self.frame_lock:
@@ -434,13 +431,14 @@ class OpenCVCamera(Camera):
         """
         Reads the latest available frame asynchronously.
 
-        This method retrieves the most recent frame captured by the background
-        read thread. It does not block waiting for the camera hardware directly,
-        but may wait up to timeout_ms for the background thread to provide a frame.
+        This method retrieves the most recent frame from the background read thread
+        WITHOUT waiting. This ensures minimal latency for robot control.
+
+        If no frame is available yet (first call), it will wait up to timeout_ms.
 
         Args:
-            timeout_ms (float): Maximum time in milliseconds to wait for a frame
-                to become available. Defaults to 200ms (0.2 seconds).
+            timeout_ms (float): Maximum time in milliseconds to wait for the first frame.
+                Defaults to 200ms (0.2 seconds).
 
         Returns:
             np.ndarray: The latest captured frame as a NumPy array in the format
@@ -448,7 +446,7 @@ class OpenCVCamera(Camera):
 
         Raises:
             DeviceNotConnectedError: If the camera is not connected.
-            TimeoutError: If no frame becomes available within the specified timeout.
+            TimeoutError: If no frame becomes available within the specified timeout (first call only).
             RuntimeError: If an unexpected error occurs.
         """
         if not self.is_connected:
@@ -457,19 +455,23 @@ class OpenCVCamera(Camera):
         if self.thread is None or not self.thread.is_alive():
             self._start_read_thread()
 
-        if not self.new_frame_event.wait(timeout=timeout_ms / 1000.0):
-            thread_alive = self.thread is not None and self.thread.is_alive()
-            raise TimeoutError(
-                f"Timed out waiting for frame from camera {self} after {timeout_ms} ms. "
-                f"Read thread alive: {thread_alive}."
-            )
-
+        # Check if we have a frame available
         with self.frame_lock:
             frame = self.latest_frame
-            self.new_frame_event.clear()
 
+        # If no frame yet (first call), wait for one
         if frame is None:
-            raise RuntimeError(f"Internal error: Event set but no frame available for {self}.")
+            if not self.new_frame_event.wait(timeout=timeout_ms / 1000.0):
+                thread_alive = self.thread is not None and self.thread.is_alive()
+                raise TimeoutError(
+                    f"Timed out waiting for first frame from camera {self} after {timeout_ms} ms. "
+                    f"Read thread alive: {thread_alive}."
+                )
+            with self.frame_lock:
+                frame = self.latest_frame
+            
+            if frame is None:
+                raise RuntimeError(f"Internal error: Event set but no frame available for {self}.")
 
         return frame
 

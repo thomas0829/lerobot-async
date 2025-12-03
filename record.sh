@@ -107,29 +107,29 @@ lerobot-record  \
 
 lerobot-teleoperate \
   --robot.type=so100_follower \
-  --robot.port=/dev/ttyACM1 \
+  --robot.port=/dev/ttyACM0 \
   --robot.id=follower_right \
   --robot.cameras='{ 
-    right: {type: opencv, index_or_path: 7, width: 640, height: 480, "fps": 30}, 
-    front: {type: opencv, index_or_path: 5, width: 640, height: 480, fps: 30}
+    wrist: {type: opencv, index_or_path: 4, width: 640, height: 480, "fps": 30}, 
+    top: {type: opencv, index_or_path: 9, width: 640, height: 480, fps: 30}
     }' \
   --teleop.type=so100_leader \
-  --teleop.port=/dev/ttyACM0 \
+  --teleop.port=/dev/ttyACM1 \
   --teleop.id=leader_right \
   --display_data=true
 
 lerobot-record \
   --robot.type=so100_follower \
-  --robot.port=/dev/ttyACM1 \
+  --robot.port=/dev/ttyACM0 \
   --robot.id=follower_right \
   --robot.cameras='{ 
-    right: {type: opencv, index_or_path: 7, width: 640, height: 480, "fps": 30}, 
-    front: {type: opencv, index_or_path: 5, width: 640, height: 480, fps: 30}
+    wrist: {type: opencv, index_or_path: 4, width: 640, height: 480, "fps": 30}, 
+    top: {type: opencv, index_or_path: 6, width: 640, height: 480, fps: 30}
     }' \
   --teleop.type=so100_leader \
-  --teleop.port=/dev/ttyACM0 \
+  --teleop.port=/dev/ttyACM1 \
   --teleop.id=leader_right \
-  --display_data=true \
-  --dataset.repo_id=thomas0829/record_pick_pen \
-  --dataset.num_episodes=100 \
-  --dataset.single_task="Pick up the pen."
+  --dataset.repo_id=thomas0829/put_the_cube_into_the_cup \
+  --display_data=false \
+  --dataset.num_episodes=30 \
+  --dataset.single_task="Put the cube into the cup."
